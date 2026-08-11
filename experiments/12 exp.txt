@@ -1,0 +1,80 @@
+# Simple Earley Parser Implementation
+
+from collections import defaultdict
+
+class State:
+    def __init__(self, lhs, rhs, dot, start):
+        self.lhs = lhs
+        self.rhs = rhs
+        self.dot = dot
+        self.start = start
+
+    def __eq__(self, other):
+        return (self.lhs, self.rhs, self.dot, self.start) == \
+               (other.lhs, other.rhs, other.dot, other.start)
+
+    def __hash__(self):
+        return hash((self.lhs, tuple(self.rhs), self.dot, self.start))
+
+    def __repr__(self):
+        rhs = self.rhs[:]
+        rhs.insert(self.dot, "•")
+        return f"{self.lhs} -> {' '.join(rhs)}, ({self.start})"
+
+def earley_parse(grammar, words, start_symbol):
+    chart = [set() for _ in range(len(words) + 1)]
+
+    # Initial state
+    chart[0].add(State("GAMMA", [start_symbol], 0, 0))
+
+    for i in range(len(chart)):
+        changed = True
+        while changed:
+            changed = False
+            states = list(chart[i])
+
+            for state in states:
+
+                # Completion
+                if state.dot == len(state.rhs):
+                    for st in list(chart[state.start]):
+                        if st.dot < len(st.rhs) and st.rhs[st.dot] == state.lhs:
+                            new_state = State(st.lhs, st.rhs, st.dot + 1, st.start)
+                            if new_state not in chart[i]:
+                                chart[i].add(new_state)
+                                changed = True
+
+                else:
+                    next_symbol = state.rhs[state.dot]
+
+                    # Prediction
+                    if next_symbol in grammar:
+                        for production in grammar[next_symbol]:
+                            new_state = State(next_symbol, production, 0, i)
+                            if new_state not in chart[i]:
+                                chart[i].add(new_state)
+                                changed = True
+
+                    # Scanning
+                    elif i < len(words) and next_symbol == words[i]:
+                        new_state = State(state.lhs, state.rhs, state.dot + 1, state.start)
+                        chart[i + 1].add(new_state)
+
+    # Accept condition
+    final_state = State("GAMMA", [start_symbol], 1, 0)
+    return final_state in chart[len(words)]
+
+# ------------------------
+# Grammar
+grammar = {
+    "S": [["NP", "VP"]],
+    "NP": [["John"]],
+    "VP": [["runs"]]
+}
+
+sentence = "John runs".split()
+
+if earley_parse(grammar, sentence, "S"):
+    print("Sentence Accepted")
+else:
+    print("Sentence Rejected")
